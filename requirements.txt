@@ -1,0 +1,9 @@
+matplotlib==3.10.0
+pandas==2.2.3
+seaborn==0.13.2
+SQLAlchemy==2.0.38
+supabase==2.13.0
+tokenizers==0.21.0
+torch==2.5.1
+transformers==4.49.0
+tqdm==4.62.3

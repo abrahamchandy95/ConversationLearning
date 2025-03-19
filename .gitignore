@@ -1,0 +1,15 @@
+# macOS-specific files
+.DS_Store
+
+# Ignore everything in the models/ directory
+models/
+
+# Python bytecode and cache directories
+__pycache__/
+*.py[cod]
+
+# Rope project settings (if you're using Rope for refactoring)
+.ropeproject/
+
+# Config file containing sensitive information
+config.py
