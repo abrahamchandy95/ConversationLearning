@@ -12,8 +12,7 @@ It uses data from Supabase along with target scores provided in a CSV file to tr
 - [Usage](#usage)
   - [Training](#training)
   - [Inference](#inference)
-- [Requirements](#requirements)
-- [License](#license)
+
 
 ## Introduction
 
