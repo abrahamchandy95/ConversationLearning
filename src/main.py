@@ -15,7 +15,7 @@ from supabase import create_client, Client
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
 from .data_setup import ConversationPreprocessor
-from .model_builder import BuddyRegressionModel
+from .model_builder import ConversationScorerModel
 
 def load_conversation(thread_id: str)-> pd.DataFrame:
     """
@@ -69,7 +69,7 @@ def main():
     )
     # load trained model
     num_targets = len(target_columns)
-    model = BuddyRegressionModel(num_targets=num_targets)
+    model = ConversationScorerModel(num_targets=num_targets)
 
     root_dir = Path(__file__).resolve().parent.parent
     model_path = root_dir / "models" / "conversation_scorer.pth"
