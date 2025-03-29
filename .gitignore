@@ -1,8 +1,9 @@
 # macOS-specific files
 .DS_Store
 
-# Ignore everything in the models/ directory
+# Ignore everything in the models/ and results/ directories
 models/
+results/
 
 # Python bytecode and cache directories
 __pycache__/
@@ -13,3 +14,7 @@ __pycache__/
 
 # Config file containing sensitive information
 config.py
+documentation.tex
+research.tex
+research.pdf
+

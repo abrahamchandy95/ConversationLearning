@@ -51,76 +51,41 @@ def load_inputs_and_targets()-> Tuple[pd.DataFrame, List[str]]:
 
     return merged_df, target_names
 
-def plot_predictions_and_targets(
-    dataset: torch.utils.data.Dataset,
-    model: torch.nn.Module,
-    target_names: List[str],
-    device: torch.device,
-    batch_size: int = 1
-) -> None:
-    """
-    Plots predicted vs. ground truth values for all target columns in a
-    grid of subplots.
-
+def plot_loss_curves(results: dict, save_path: str = "results/loss_curves.png") -> None:
+    """Plots training and validation loss curves from training results.
+    
     Args:
-        dataset (torch.utils.data.Dataset): Dataset yielding
-        (input_ids, attention_mask, targets).
-        model (torch.nn.Module): The trained PyTorch regression model.
-        target_columns (List[str]): List of target column names.
-        device (torch.device): Device to run inference on.
-        batch_size (int): Batch size for the DataLoader.
-
-    Returns:
-        None. Displays a grid of scatter plots for all target columns.
+        results (dict): Dictionary containing training metrics
+        save_path (str): Path to save the plot image
     """
-    # DataLoader object to iterate over the dataset
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-    model.eval()
-
-    all_preds = []
-    all_targets = []
-
-    with torch.no_grad():
-        for batch in dataloader:
-            input_ids, attention_mask, targets = batch
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-
-            preds = model(input_ids, attention_mask)
-            all_preds.append(preds.cpu())
-            all_targets.append(targets)
-
-    all_preds = torch.cat(all_preds, dim=0)
-    all_targets = torch.cat(all_targets, dim=0)
-
-    num_targets = len(target_names)
-    # make a grid for subplots
-    cols = math.ceil(math.sqrt(num_targets))
-    rows = math.ceil(num_targets/cols)
-
-    fig, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(cols*4, rows*4))
-
-    if num_targets == 1:
-        axes = [axes]
-    else:
-        axes = axes.flatten()
-
-    for idx in range(num_targets):
-        ax = axes[idx]
-        ax.scatter(
-            all_targets[:, idx].numpy(), all_preds[:, idx].numpy(), alpha=0.7
-        )
-        ax.set_xlabel("Ground Truth")
-        ax.set_ylabel("Predicted")
-        ax.set_title(target_names[idx])
-
-    # delete unused subplots
-    for idx in range(num_targets, len(axes)):
-        fig.delaxes(axes[idx])
-
-    plt.tight_layout()
-    plt.show()
-
+    plt.figure(figsize=(10, 6))
+    
+    # Get loss values
+    train_loss = results['train_loss']
+    val_loss = results['val_loss']
+    epochs = range(1, len(train_loss) + 1)
+    
+    # Plot losses
+    plt.plot(epochs, train_loss, label='Train Loss', marker='o')
+    plt.plot(epochs, val_loss, label='Validation Loss', marker='o')
+    
+    # Add best epoch marker
+    best_epoch = val_loss.index(min(val_loss)) + 1
+    plt.axvline(x=best_epoch, color='r', linestyle='--', 
+                label=f'Best Epoch ({best_epoch})')
+    
+    # Style plot
+    plt.title("Training and Validation Loss Curves")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss (MSE)")
+    plt.legend()
+    plt.grid(True)
+    
+    # Create results directory if needed
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Saved loss curves to {save_path}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -177,9 +142,6 @@ def main():
     )
     # Optional: Plot predictions vs. ground truth.
     if args.plot:
-        plot_predictions_and_targets(
-            dataset, model, target_names, device, batch_size=BATCH_SIZE
-        )
-
+        plot_loss_curves(results, save_path="results/loss_curves.png")
 if __name__ == "__main__":
     main()
