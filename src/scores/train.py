@@ -3,24 +3,25 @@ Trains a Pytorch regression model for conversation scoring using data
 from Supabase
 """
 import argparse
-from typing import Tuple, List
-import os
-import sys
+from typing import Tuple, List, Union
+from pathlib import Path
 
 from timeit import default_timer as timer
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
+# config and utilities
 from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+from ..utils import load_conversation, load_scores, save_model
+
+# internal modules
 from .data_setup import ConversationPreprocessor, ConversationDataset
 from .model_builder import ConversationScorerModel
 from .engine import train
-from .utils import load_conversation, load_scores, save_model
 
-def load_inputs_and_targets()-> Tuple[pd.DataFrame, List[str]]:
+
+def load_inputs_and_targets() -> Tuple[pd.DataFrame, List[str]]:
     """
     Loads the inputs from Supabase and our ground-truth values from
     root/data/scores.csv
@@ -32,7 +33,7 @@ def load_inputs_and_targets()-> Tuple[pd.DataFrame, List[str]]:
     """
     scores_df = load_scores("scores.csv")
     thread_ids = scores_df['thread_id'].unique().tolist()
-    target_names = scores_df.columns.drop("thread_id").tolist()
+    target_names = [c for c in scores_df.columns if c != "thread_id"]
     # for each thread_id, load and preprocess the conversation, then merge
     preprocessor = ConversationPreprocessor(max_length=3000)
     valid_convs = pd.DataFrame()
@@ -42,22 +43,32 @@ def load_inputs_and_targets()-> Tuple[pd.DataFrame, List[str]]:
         if chat_df.empty:
             continue
         tokenized_chat = preprocessor.preprocess_conversations(chat_df)
-        valid_convs = pd.concat([valid_convs, tokenized_chat], ignore_index=True)
+        valid_convs = pd.concat(
+            [valid_convs, tokenized_chat], ignore_index=True)
 
     merged_df = valid_convs.merge(scores_df, on="thread_id", how="inner")
 
     return merged_df, target_names
 
-def plot_loss_curves(results: dict, save_path: str = "results/loss_curves.png") -> None:
+
+def plot_loss_curves(
+    results: dict,
+    save_path: Union[str, Path] = "results/loss_curves.png"
+) -> None:
     """Plots training and validation loss curves from training results.
 
     Args:
         results (dict): Dictionary containing training metrics
         save_path (str): Path to save the plot image
     """
+    save_path = Path(save_path)
+
+    root = Path(__file__).resolve().parents[2]
+    full_save_path = root / save_path
+    full_save_path.parent.mkdir(parents=True, exist_ok=True)
+
     plt.figure(figsize=(10, 6))
 
-    # Get loss values
     train_loss = results['train_loss']
     val_loss = results['val_loss']
     epochs = range(1, len(train_loss) + 1)
@@ -68,8 +79,10 @@ def plot_loss_curves(results: dict, save_path: str = "results/loss_curves.png") 
 
     # Add best epoch marker
     best_epoch = val_loss.index(min(val_loss)) + 1
-    plt.axvline(x=best_epoch, color='r', linestyle='--',
-                label=f'Best Epoch ({best_epoch})')
+    plt.axvline(
+        x=best_epoch, color='r', linestyle='--',
+        label=f'Best Epoch ({best_epoch})'
+    )
 
     # Style plot
     plt.title("Training and Validation Loss Curves")
@@ -78,13 +91,15 @@ def plot_loss_curves(results: dict, save_path: str = "results/loss_curves.png") 
     plt.legend()
     plt.grid(True)
 
-    # Create results directory if needed
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path)
+    plt.savefig(full_save_path)
     plt.close()
     print(f"Saved loss curves to {save_path}")
 
+
 def main():
+    """
+    Starts the training, an will optionally output a plot
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Train a regression model for conversation scoring, with"
@@ -92,14 +107,14 @@ def main():
         )
     )
     parser.add_argument(
-            "--plot",
-            action="store_true",
-            help="Optional: Plot predicted vs ground truth values"
+        "--plot",
+        action="store_true",
+        help="Optional: Plot predicted vs ground truth values"
     )
     args = parser.parse_args()
 
     # Hyperparameters and device setup
-    NUM_EPOCHS = 30
+    NUM_EPOCHS = 10
     BATCH_SIZE = 2
     LEARNING_RATE = 2e-4
     device = torch.device(
@@ -140,5 +155,7 @@ def main():
     # Optional: Plot predictions vs. ground truth.
     if args.plot:
         plot_loss_curves(results, save_path="results/loss_curves.png")
+
+
 if __name__ == "__main__":
     main()

@@ -1,10 +1,14 @@
+"""
+Train/Validation steps and evaluation metrics for conversation scoring
+"""
 from typing import Dict, List, Optional, Tuple
 import torch
 from torch.utils.data import DataLoader, random_split
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
 from tqdm.auto import tqdm
 from .data_setup import ConversationDataset
+
 
 def train_step(
         model: torch.nn.Module,
@@ -12,9 +16,9 @@ def train_step(
         loss_fn: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         device: torch.device
-)-> float:
+) -> float:
     """
-        Performs training for one epoch.
+    Performs training for one epoch.
     """
     model.train()
     total_loss = 0.0
@@ -40,12 +44,16 @@ def train_step(
 
     return avg_loss
 
+
 def val_step(
         model: torch.nn.Module,
         dataloader: DataLoader,
         loss_fn: torch.nn.Module,
         device: torch.device
 ) -> float:
+    """
+    Performs the validation step for one epoch
+    """
 
     model.eval()
     total_loss = 0.0
@@ -67,6 +75,7 @@ def val_step(
         avg_loss = total_loss / total_samples
 
     return avg_loss
+
 
 def compute_metrics(
     dataloader: DataLoader,
@@ -108,10 +117,71 @@ def compute_metrics(
     # compute R^2
     # R^2 = 1 - (Sum of Square of Residuals/Total Sum of Squares)
     ss_res = torch.sum((all_targets - all_preds) ** 2)
-    ss_tot = torch.sum((all_targets - torch.mean(all_targets))** 2)
+    ss_tot = torch.sum((all_targets - torch.mean(all_targets)) ** 2)
     r_sq = 1 - (ss_res / ss_tot).item() if ss_tot > 0 else float('nan')
 
     return mae, r_sq
+
+
+def prepare_dataloaders(
+    dataset: ConversationDataset,
+    batch_size: int,
+    val_split: float = 0.1
+) -> Tuple[DataLoader, DataLoader]:
+    """
+    Splits the dataset into training and validation sets and returns loaders.
+
+    Args:
+        dataset: PyTorch dataset
+        batch_size: batch size for loaders
+        val_split: fraction of dataset used for validation
+
+    Returns:
+        train_loader, val_loader
+    """
+    total = len(dataset)
+    n_val = int(total * val_split)
+    n_train = total - n_val
+    train_ds, val_ds = random_split(dataset, [n_train, n_val])
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False
+    )
+    return train_loader, val_loader
+
+
+def run_epoch(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    loss_fn: nn.Module,
+    optimizer: optim.Optimizer,
+    device: torch.device
+) -> Dict[str, float]:
+    "Runs training and validation steps for one epoch and returns metrices"
+    train_loss = train_step(
+        model, train_loader, loss_fn, optimizer, device
+    )
+    val_loss = val_step(model, val_loader, loss_fn, device)
+    tmae, trsq = compute_metrics(train_loader, model, device)
+    vmae, vrsq = compute_metrics(val_loader, model, device)
+    return {
+        "train_loss": train_loss,
+        "val_loss": val_loss,
+        "train_mae": tmae,
+        "val_mae": vmae,
+        "train_rsq": trsq,
+        "val_rsq": vrsq
+    }
 
 
 def train(
@@ -145,24 +215,7 @@ def train(
             else ("cuda" if torch.cuda.is_available() else "cpu")
         )
     model.to(device)
-    # split the dataset into training and validation sets
-    total = len(dataset)
-    n_val = int(total * split)
-    n_train = total - n_val
-    train_dataset, val_dataset = random_split(dataset, [n_train, n_val])
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=True
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False, 
-        drop_last=False
-    )
-
+    train_loader, val_loader = prepare_dataloaders(dataset, batch_size, split)
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -175,24 +228,17 @@ def train(
         "val_rsq": []
     }
 
-    for epoch in tqdm(range(epochs), desc="Training epochs"):
-        train_loss = train_step(model, train_loader, loss_fn, optimizer, device)
-        val_loss = val_step(model, val_loader, loss_fn, device)
-        # compute metrics
-        train_mae, train_rsq = compute_metrics(train_loader, model, device)
-        val_mae, val_rsq = compute_metrics(val_loader, model, device)
-
+    for epoch in tqdm(range(epochs), desc="Training"):
+        metrics = run_epoch(
+            model, train_loader, val_loader, loss_fn, optimizer, device
+        )
+        for key, value in metrics.items():
+            results[key].append(value)
         print(
             f"Epoch {epoch+1}/{epochs}: "
-            f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
-            f"Train MAE = {train_mae:.4f}, Train R^2 = {train_rsq}, "
-            f"Val MAE = {val_mae:.4f}, Val R^2 = {val_rsq}"
+            f"Train loss {metrics['train_loss']:.4f}, Val loss {
+                metrics['val_loss']:.4f}; "
+            f"MAE {metrics['train_mae']:.4f}/{metrics['val_mae']:.4f}; "
+            f"R2 {metrics['train_rsq']:.4f}/{metrics['val_rsq']:.4f}"
         )
-        results["train_loss"].append(train_loss)
-        results["val_loss"].append(val_loss)
-        results["train_mae"].append(train_mae)
-        results["train_rsq"].append(train_rsq)
-        results["val_mae"].append(val_mae)
-        results["val_rsq"].append(val_rsq)
-
     return results

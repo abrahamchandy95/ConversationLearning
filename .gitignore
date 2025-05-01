@@ -4,6 +4,7 @@
 # Ignore everything in the models/ and results/ directories
 models/
 results/
+data/
 
 # Python bytecode and cache directories
 __pycache__/

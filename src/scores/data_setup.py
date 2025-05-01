@@ -3,9 +3,14 @@ from typing import List, Optional
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
-from transformers import LongformerTokenizer
+from transformers.models.longformer import LongformerTokenizer
+
 
 class ConversationPreprocessor:
+    """
+    Tokenizes conversations and preprocesses it for machine learning
+    """
+
     def __init__(
             self,
             tokenizer_model: str = 'allenai/longformer-base-4096',
@@ -40,7 +45,7 @@ class ConversationPreprocessor:
         get complete conversations between bot and user
         """
         conv_df = df.groupby('thread_id')['message_modified']\
-                    .apply(lambda msgs: "\n".join(msgs)) \
+                    .agg("\n".join) \
                     .reset_index() \
                     .rename(columns={'message_modified': 'text'})
 
@@ -53,13 +58,13 @@ class ConversationPreprocessor:
         Pytorch Tensors
         """
         tokens = self.tokenizer.encode_plus(
-                text,
-                add_special_tokens=True,
-                max_length=self.max_length,
-                truncation=True,
-                padding='max_length',
-                return_attention_mask=True,
-                return_tensors='pt'
+            text,
+            add_special_tokens=True,
+            max_length=self.max_length,
+            truncation=True,
+            padding='max_length',
+            return_attention_mask=True,
+            return_tensors='pt'
         )
         return tokens
 
@@ -79,9 +84,13 @@ class ConversationPreprocessor:
 
 
 class ConversationDataset(Dataset):
+    """
+    Turns the conversation data into datasets
+    """
+
     def __init__(
         self, df_tokens: pd.DataFrame,
-        target_columns: Optional[List[str]]=None
+        target_columns: Optional[List[str]] = None
     ):
         self.df = df_tokens
         self.target_columns = target_columns
@@ -91,15 +100,15 @@ class ConversationDataset(Dataset):
 
     def __getitem__(self, idx: int):
         row = self.df.iloc[idx]
-        tokenized = row['tokenized']
+        tokenized: dict = row['tokenized']
+        # tokenized tensors are of shape [1, seq_len]
         input_ids = tokenized['input_ids'].squeeze(0)
         attention_mask = tokenized['attention_mask'].squeeze(0)
-        if self.target_columns is not None:
-            # Convert targets to float32 tensor
-            targets = torch.tensor(
-                row[self.target_columns].values.astype('float32'),
-                dtype=torch.float
-            )
+
+        if self.target_columns:
+            # extract target values and convert to float tensor
+            target_vals = row[self.target_columns].to_numpy(dtype='float32')
+            targets = torch.tensor(target_vals, dtype=torch.float)
             return input_ids, attention_mask, targets
-        else:
-            return input_ids, attention_mask
+
+        return input_ids, attention_mask
