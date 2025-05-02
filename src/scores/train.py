@@ -33,7 +33,12 @@ def load_inputs_and_targets() -> Tuple[pd.DataFrame, List[str]]:
     """
     scores_df = load_scores("scores.csv")
     thread_ids = scores_df['thread_id'].unique().tolist()
-    target_names = [c for c in scores_df.columns if c != "thread_id"]
+    target_names = [
+        c
+        for c in scores_df.columns
+        if c != "thread_id" and not c.startswith("Unnamed")
+    ]
+
     # for each thread_id, load and preprocess the conversation, then merge
     preprocessor = ConversationPreprocessor(max_length=3000)
     valid_convs = pd.DataFrame()

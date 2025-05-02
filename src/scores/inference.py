@@ -6,7 +6,7 @@ for a conversation stored in supabase.
 
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import torch
 import pandas as pd
 from supabase import create_client, Client
@@ -35,8 +35,9 @@ def load_conversation(thread_id: str) -> pd.DataFrame:
 
 
 def tokenize_chat(
-    chat_df: pd.DataFrame, max_length: int = 3000
-) -> tuple[torch.Tensor, torch.Tensor]:
+    chat_df: pd.DataFrame,
+    max_length: int = 3000
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Tokenizes the conversation in a DataFrame
     """
