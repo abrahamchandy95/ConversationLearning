@@ -9,10 +9,15 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 import torch
 import pandas as pd
+from transformers import logging as hf_logging
+
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
 from .model_builder import ConversationScorerModel
 from .data_setup import ConversationPreprocessor
+
+
+hf_logging.set_verbosity_error()  # only show erors from transformers
 
 
 def load_conversation(thread_id: str) -> pd.DataFrame:
@@ -62,15 +67,16 @@ def get_target_columns(
     return cols
 
 
-def select_device() -> torch.device:
-    """
-    Selects the device for Pytorch to use
-    """
+def select_device(verbose: bool = False) -> torch.device:
     if torch.backends.mps.is_available():
-        return torch.device('mps')
-    if torch.cuda.is_available():
-        return torch.device('cuda')
-    return torch.device('cpu')
+        dev = torch.device("mps")
+    elif torch.cuda.is_available():
+        dev = torch.device("cuda")
+    else:
+        dev = torch.device("cpu")
+    if verbose:
+        print(f"Using device: {dev}")
+    return dev
 
 
 def load_model(

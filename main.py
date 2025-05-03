@@ -5,6 +5,7 @@ from src.scores.inference import run_inference as run_score_inference
 from src.sentiment.inference import (
     run_thread_inference as run_sentiment_inference
 )
+from src.insights.inference import run_insights
 
 
 def main():
@@ -27,23 +28,29 @@ def main():
         "P_positive": p_pos
     }
 
+    insights = run_insights(thread_id)
     # 3) Merge into one result
     result = {
         "thread_id": thread_id,
         "scores": scores,
-        "sentiment": sentiment
+        "sentiment": sentiment,
+        "insights": insights
     }
+    # 5) Pretty‐print
+    print(f"\n=== Results for thread {thread_id} ===")
+    print("\n— Conversation Scores —")
+    for name, val in scores.items():
+        print(f"  {name}: {val:.3f}")
 
-    # 4) Print or return
-    print(f"\nResults for thread {thread_id}:")
-    print("-"*40)
-    print(f"Output from {len(result) - 1} models")
-    print("Conversation scores:")
-    for k, v in scores.items():
-        print(f"  {k}: {v:.3f}")
-    print("\nSentiment:")
+    print("\n— Sentiment —")
     print(f"  Label      : {sentiment['sentiment_label']}")
     print(f"  P_positive : {sentiment['P_positive']:.3f}")
+
+    print("\n— Other Insights —")
+    print(f"  Topics             : {insights['central_topics']}")
+    print(f"  Image requests     : {insights['image_requests']}")
+    print(f"  Mind-map requests : {insights['mindmap_requests']}")
+    print(f"  User interactions  : {insights['interactions']}")
 
 
 if __name__ == "__main__":
