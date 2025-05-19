@@ -39,7 +39,7 @@ def main():
     # 5) Pretty‐print
     print(f"\n=== Results for thread {thread_id} ===")
     print("\n— Conversation Scores —")
-    for name, val in scores.items():
+    for name, val in result.items():
         print(f"  {name}: {val:.3f}")
 
     print("\n— Sentiment —")
