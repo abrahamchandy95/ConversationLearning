@@ -12,7 +12,7 @@ import pandas as pd
 import torch
 
 # config and utilities
-from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
 from ..utils import load_conversation, load_scores, save_model
 
 # internal modules

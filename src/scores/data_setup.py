@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import torch
 import pandas as pd
@@ -98,17 +98,32 @@ class ConversationDataset(Dataset):
     def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idx: int):
-        row = self.df.iloc[idx]
-        tokenized: dict = row['tokenized']
-        # tokenized tensors are of shape [1, seq_len]
-        input_ids = tokenized['input_ids'].squeeze(0)
-        attention_mask = tokenized['attention_mask'].squeeze(0)
+    def __getitem__(self, idx: Union[int, List[int]]):
+        if isinstance(idx, int):
+            row = self.df.iloc[idx]
+            tokenized: dict = row['tokenized']
+            # tokenized tensors are of shape [1, seq_len]
+            input_ids = tokenized['input_ids'].squeeze(0)
+            attention_mask = tokenized['attention_mask'].squeeze(0)
 
-        if self.target_columns:
-            # extract target values and convert to float tensor
-            target_vals = row[self.target_columns].to_numpy(dtype='float32')
-            targets = torch.tensor(target_vals, dtype=torch.float)
-            return input_ids, attention_mask, targets
+            if self.target_columns:
+                # extract target values and convert to float tensor
+                target_vals = row[self.target_columns].to_numpy(dtype='float32')
+                targets = torch.tensor(target_vals, dtype=torch.float)
+                return input_ids, attention_mask, targets
 
-        return input_ids, attention_mask
+            return input_ids, attention_mask
+        # only during inference
+        elif isinstance(idx, list):
+            input_ids = []
+            attention_mask = []
+
+            for i in idx:
+                row = self.df.iloc[i]
+                tokenized = row['tokenized']
+                input_ids.append(tokenized['input_ids'].squeeze(0))
+                attention_mask.append(tokenized['attention_mask'].squeeze(0))
+            return input_ids, attention_mask
+
+        else:
+            raise TypeError

@@ -6,15 +6,23 @@ for a conversation stored in supabase.
 
 import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, TypedDict, cast
 import torch
 import pandas as pd
 from transformers import logging as hf_logging
-
 from supabase import create_client, Client
-from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
 from .model_builder import ConversationScorerModel
 from .data_setup import ConversationPreprocessor
+from ..utils import select_device
+from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
+class TokenDict(TypedDict):
+    """
+    Class that helps identify the output of function tokenize_chat()
+    """
+    input_ids: torch.Tensor
+    attention_mask: torch.Tensor
 
 
 hf_logging.set_verbosity_error()  # only show erors from transformers
@@ -48,7 +56,8 @@ def tokenize_chat(
     """
     preproc = ConversationPreprocessor(max_length=max_length)
     conv_df = preproc.preprocess_conversations(chat_df)
-    tokens = conv_df.loc[0, 'tokenized']
+    token_series = conv_df["tokenized"]
+    tokens = cast(TokenDict, token_series.iloc[0])
     return tokens['input_ids'], tokens['attention_mask']
 
 
@@ -65,18 +74,6 @@ def get_target_columns(
         if c != "thread_id" and not c.startswith("Unnamed")
     ]
     return cols
-
-
-def select_device(verbose: bool = False) -> torch.device:
-    if torch.backends.mps.is_available():
-        dev = torch.device("mps")
-    elif torch.cuda.is_available():
-        dev = torch.device("cuda")
-    else:
-        dev = torch.device("cpu")
-    if verbose:
-        print(f"Using device: {dev}")
-    return dev
 
 
 def load_model(

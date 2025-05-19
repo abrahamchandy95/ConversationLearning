@@ -4,13 +4,15 @@ Run sentiment inference on a single thread_id using a trained SentimentLSTM.
 from typing import Tuple, List
 import torch
 from torch.utils.data import DataLoader
-from transformers import DataCollatorWithPadding
+from transformers import DataCollatorWithPadding, logging
 import pandas as pd
 
-from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
 from .data_setup import TextTokenizer, DatasetBuilder, DataLoaderBuilder
 from .model_builder import SentimentLSTM, SentimentConfig
 from ..utils import get_root, load_conversation
+from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
+logging.set_verbosity_error()
 
 
 def prepare_thread_loader(

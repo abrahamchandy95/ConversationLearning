@@ -1,10 +1,14 @@
 """
-Utility functions for loading and saving.
+Utility functions
 """
 from pathlib import Path
 import pandas as pd
 from supabase import create_client, Client
 import torch
+
+from src.scores.model_builder import ConversationScorerModel
+from src.sentiment.data_setup import TextTokenizer
+from src.sentiment.model_builder import SentimentLSTM, SentimentConfig
 
 
 def get_root() -> Path:
@@ -57,9 +61,32 @@ def load_chats(
         A pandas DataFrame containing chat messages.
     """
     supabase: Client = create_client(supabase_url, supabase_service_key)
-    response = supabase.table("chat_messages").select("*").execute()
-    data = response.data
-    df = pd.DataFrame(data)
+    response = supabase.table("chat_messages").\
+        select('*', count='exact').execute()
+    total_rows = response.count if response.count is not None else 0
+    batch_size = 1000
+    all_chats = []
+
+    # Fetch data in batches
+    for start in range(0, total_rows, batch_size):
+        end = min(start + batch_size - 1, total_rows - 1)
+        response = supabase.table("chat_messages") \
+            .select("*, chat_threads(user_id)") \
+            .range(start, end) \
+            .execute()
+
+        # Flatten nested chat_threads structure
+        for item in response.data:
+            if "chat_threads" in item and isinstance(item["chat_threads"], dict):
+                item["user_id"] = item["chat_threads"].get("user_id")
+            else:
+                item["user_id"] = None
+            del item["chat_threads"]
+
+        all_chats.extend(response.data)
+
+    # Convert to DataFrame
+    df = pd.DataFrame(all_chats)
     df['created_at'] = pd.to_datetime(df['created_at'])
     df.sort_values(['thread_id', 'created_at'], inplace=True)
     return df
@@ -115,3 +142,44 @@ def save_model(
 
     print(f"[INFO] Saving model to: {model_save_path}")
     torch.save(obj=model.state_dict(), f=model_save_path)
+
+
+def select_device(verbose: bool = False) -> torch.device:
+    """
+    Returns the available device
+    """
+    if torch.backends.mps.is_available():
+        dev = torch.device("mps")
+    elif torch.cuda.is_available():
+        dev = torch.device("cuda")
+    else:
+        dev = torch.device("cpu")
+    if verbose:
+        print(f"Using device: {dev}")
+    return dev
+
+
+def load_score_model(
+    model_dir: Path,
+    num_targets: int,
+    device: torch.device
+) -> ConversationScorerModel:
+    model = ConversationScorerModel(num_targets=num_targets).to(device)
+    model.eval()
+    ckpt = model_dir / 'conversation_scorer.pth'
+    state = torch.load(ckpt, map_location=device)
+    model.load_state_dict(state)
+    return model
+
+
+def load_sentiment_model(
+    model_dir: Path,
+    tokenizer: TextTokenizer,
+    device: torch.device
+) -> SentimentLSTM:
+    ckpt = Path(model_dir) / 'sentiment_model.pth'
+    model = SentimentLSTM(tokenizer.hf_tokenizer, SentimentConfig(
+        num_classes=2), device=str(device)).to(device)
+    model.load_state_dict(torch.load(ckpt, map_location=device))
+    model.eval()
+    return model
