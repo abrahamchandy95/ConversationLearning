@@ -3,20 +3,19 @@ Train a sentiment classifier end-to-end using an LSTM model
 """
 from pathlib import Path
 from typing import Tuple, Dict
-from transformers import (
-    DataCollatorWithPadding, get_linear_schedule_with_warmup
-)
+from transformers.data.data_collator import DataCollatorWithPadding
+from transformers.optimization import get_linear_schedule_with_warmup
 import torch
 from torch import nn, optim
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 import pandas as pd
 from tqdm.auto import tqdm
 
+from src.utils.utils import get_root
 from .download_dataset import download_and_extract
 from .data_setup import DataLoaderBuilder, TextTokenizer, DatasetBuilder
 from .model_builder import SentimentLSTM, SentimentConfig
-from ..utils import get_root
 
 
 def prepare_data(
@@ -66,7 +65,7 @@ class Trainer:
         self,
         model: nn.Module,
         optimizer: optim.Optimizer,
-        scheduler: _LRScheduler,
+        scheduler: LRScheduler,
         criterion: nn.Module
     ):
         self.model = model

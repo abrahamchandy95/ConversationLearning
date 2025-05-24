@@ -6,12 +6,12 @@ from typing import Tuple, List
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from transformers import DataCollatorWithPadding
+from transformers.data.data_collator import DataCollatorWithPadding
 from tqdm.auto import tqdm
 
+from src.utils.utils import get_root
 from .data_setup import TextTokenizer, DatasetBuilder, DataLoaderBuilder
 from .model_builder import SentimentConfig, SentimentLSTM
-from ..utils import get_root
 
 
 def prepare_test_data(

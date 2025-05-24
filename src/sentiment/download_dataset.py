@@ -6,7 +6,7 @@ from zipfile import ZipFile, BadZipFile
 import requests
 from tqdm import tqdm
 
-from ..utils import get_root
+from src.utils.utils import get_root
 
 __all__ = [
     "_CITATION", "_DESCRIPTION", "_URL",

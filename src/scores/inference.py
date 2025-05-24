@@ -4,6 +4,7 @@ The script prompts the user for a single thread id, which is the id
 for a conversation stored in supabase.
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import List, Dict, Tuple, TypedDict, cast
@@ -12,10 +13,11 @@ import pandas as pd
 from transformers import logging as hf_logging
 from supabase import create_client, Client
 
+from src.utils.utils import select_device
+from src.utils.db import load_conversation
 from .model_builder import ConversationScorerModel
 from .data_setup import ConversationPreprocessor
-from ..utils import select_device
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
 
 class TokenDict(TypedDict):
     """
@@ -26,25 +28,6 @@ class TokenDict(TypedDict):
 
 
 hf_logging.set_verbosity_error()  # only show erors from transformers
-
-
-def load_conversation(thread_id: str) -> pd.DataFrame:
-    """
-    Queries supabase for the precific conversation
-    """
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    response = (
-        supabase.table("chat_messages")
-        .select("*")
-        .eq("thread_id", thread_id)
-        .execute()
-    )
-    data = response.data
-    df = pd.DataFrame(data)
-    if not df.empty:
-        df['created_at'] = pd.to_datetime(df['created_at'])
-        df = df.sort_values(['thread_id', 'created_at'])
-    return df
 
 
 def tokenize_chat(
@@ -92,7 +75,7 @@ def load_model(
     return model.to(device).eval()
 
 
-def run_inference(thread_id: str) -> Dict[str, float]:
+def run_inference(client: Client, thread_id: str) -> Dict[str, float]:
     """
     Converts a target conversation to a dictionary of values to scores
     """
@@ -101,8 +84,7 @@ def run_inference(thread_id: str) -> Dict[str, float]:
     data_dir = root / "data"
     model_dir = root / "models"
 
-    # load and prepare chat
-    chat_df = load_conversation(thread_id)
+    chat_df = load_conversation(client, thread_id)
     targets = get_target_columns(data_dir)
     input_ids, attention_mask = tokenize_chat(chat_df)
 
@@ -120,12 +102,18 @@ def run_inference(thread_id: str) -> Dict[str, float]:
 
 
 def main():
+    """
+    Dictates the workflow of the inference of the model
+    """
     thread_id = input("Enter the thread id for the conversation: ").strip()
     if not thread_id:
         print("No Thread id provided")
         sys.exit(1)
-
-    results = run_inference(thread_id)
+    # load and prepare chat
+    client = create_client(
+        os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
+    )
+    results = run_inference(client, thread_id)
     print("\nPredicted Scores:")
     for name, val in results.items():
         print(f"{name}: {val:.3f}")

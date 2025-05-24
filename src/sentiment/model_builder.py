@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
-from transformers import PreTrainedTokenizer
+from transformers.tokenization_utils import PreTrainedTokenizer
 
 
 @dataclass
@@ -48,7 +48,7 @@ class SentimentLSTM(nn.Module):
         self.embedding = nn.Embedding(
             num_embeddings=vocab_size,
             embedding_dim=config.embed_dim,
-            padding_idx=pad_idx
+            padding_idx=pad_idx  # type: ignore[arg-type]
         )
         self.lstm = nn.LSTM(
             input_size=config.embed_dim,

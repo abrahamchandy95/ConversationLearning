@@ -3,7 +3,6 @@ Utility functions
 """
 from pathlib import Path
 import pandas as pd
-from supabase import create_client, Client
 import torch
 
 from src.scores.model_builder import ConversationScorerModel
@@ -16,80 +15,6 @@ def get_root() -> Path:
     Returns the root directory of the project
     """
     return Path(__file__).resolve().parent.parent
-
-
-def load_conversation(
-        thread_id: str,
-        supabase_url: str,
-        supabase_key: str
-) -> pd.DataFrame:
-    """
-    Queries Supabase for chat messages with the given thread id.
-    Args:
-        thread_id: The thread id for which to load chat messages.
-    Returns:
-        A pandas DataFrame with chat messages for that thread,
-        with 'created_at' converted to datetime and sorted.
-    """
-    supabase: Client = create_client(supabase_url, supabase_key)
-    response = (
-        supabase.table("chat_messages")
-        .select('*')
-        .eq("thread_id", thread_id)
-        .execute()
-    )
-    data = response.data
-    df = pd.DataFrame(data)
-    if not df.empty:
-        df['created_at'] = pd.to_datetime(df['created_at'])
-        df = df.sort_values(['thread_id', 'created_at'])
-    return df
-
-
-def load_chats(
-    supabase_url: str,
-    supabase_service_key: str
-) -> pd.DataFrame:
-    """
-    Loads chat messages from Supabase and returns a DataFrame.
-
-    Args:
-        supabase_url: The URL for the Supabase instance.
-        supabase_service_key: The Supabase service key for authentication.
-
-    Returns:
-        A pandas DataFrame containing chat messages.
-    """
-    supabase: Client = create_client(supabase_url, supabase_service_key)
-    response = supabase.table("chat_messages").\
-        select('*', count='exact').execute()
-    total_rows = response.count if response.count is not None else 0
-    batch_size = 1000
-    all_chats = []
-
-    # Fetch data in batches
-    for start in range(0, total_rows, batch_size):
-        end = min(start + batch_size - 1, total_rows - 1)
-        response = supabase.table("chat_messages") \
-            .select("*, chat_threads(user_id)") \
-            .range(start, end) \
-            .execute()
-
-        # Flatten nested chat_threads structure
-        for item in response.data:
-            if "chat_threads" in item and isinstance(item["chat_threads"], dict):
-                item["user_id"] = item["chat_threads"].get("user_id")
-            else:
-                item["user_id"] = None
-            del item["chat_threads"]
-
-        all_chats.extend(response.data)
-
-    # Convert to DataFrame
-    df = pd.DataFrame(all_chats)
-    df['created_at'] = pd.to_datetime(df['created_at'])
-    df.sort_values(['thread_id', 'created_at'], inplace=True)
-    return df
 
 
 def load_scores(
@@ -164,6 +89,7 @@ def load_score_model(
     num_targets: int,
     device: torch.device
 ) -> ConversationScorerModel:
+    """Loads the regression model"""
     model = ConversationScorerModel(num_targets=num_targets).to(device)
     model.eval()
     ckpt = model_dir / 'conversation_scorer.pth'
@@ -177,6 +103,7 @@ def load_sentiment_model(
     tokenizer: TextTokenizer,
     device: torch.device
 ) -> SentimentLSTM:
+    """Loads the model to predict sentiments"""
     ckpt = Path(model_dir) / 'sentiment_model.pth'
     model = SentimentLSTM(tokenizer.hf_tokenizer, SentimentConfig(
         num_classes=2), device=str(device)).to(device)

@@ -1,9 +1,26 @@
-matplotlib==3.10.0
+# Core data & ML
 pandas==2.2.3
-seaborn==0.13.2
-SQLAlchemy==2.0.38
-supabase==2.13.0
-tokenizers==0.21.0
 torch==2.5.1
-transformers==4.49.0
+transformers==4.52.2
+datasets==3.6.0
+sentence-transformers==2.2.2
+keybert==0.7.0
+tokenizers==0.21.0
+
+# DB & API clients
+SQLAlchemy==2.0.38
+supabase==2.15.1
+
+# Web framework
+fastapi==0.95.2
+uvicorn[standard]==0.23.1
+
+# Env var management
+python-dotenv==1.0.0
+
+# Utilities
+matplotlib==3.10.0
+seaborn==0.13.2
 tqdm==4.62.3
+
+

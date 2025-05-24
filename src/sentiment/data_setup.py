@@ -3,12 +3,16 @@ Module to handle preprocessing of text data - tokenizing and loading.
 Preprocessing to get the text data ready for training
 """
 import os
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any, cast
 import pandas as pd
 from datasets import Dataset
 import torch
 from torch.utils.data import DataLoader, Dataset as TorchDataset
-from transformers import AutoTokenizer, DataCollatorWithPadding
+from transformers import AutoTokenizer
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_base import BatchEncoding
+from transformers.data.data_collator import DataCollatorWithPadding
+
 
 # Ensure tokenizers parallelism is disabled before any worker fork
 TOK_ENV = "TOKENIZERS_PARALLELISM"
@@ -43,14 +47,15 @@ class TextTokenizer:
     ):
         self.model_name = model_name
         self.max_length = max_length
-        self._tokenizer: Optional[AutoTokenizer] = None
+        self._tokenizer: Optional[PreTrainedTokenizer] = None
 
-    def _get_tokenizer(self) -> AutoTokenizer:
+    def _get_tokenizer(self) -> PreTrainedTokenizer:
         if self._tokenizer is None:
             self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        assert self._tokenizer is not None
         return self._tokenizer
 
-    def encode_batch(self, texts: List[str]) -> Dict[str, Any]:
+    def encode_batch(self, texts: List[str]) -> BatchEncoding:
         """
         Tokenizes a batch of strings into input ids and attention masks
         """
@@ -63,7 +68,7 @@ class TextTokenizer:
             return_tensors=None
         )
 
-    def encode(self, text: str) -> Dict[str, Any]:
+    def encode(self, text: str) -> BatchEncoding:
         """
         Tokenize a single text string
         """
@@ -77,7 +82,7 @@ class TextTokenizer:
         )
 
     @property
-    def hf_tokenizer(self) -> AutoTokenizer:
+    def hf_tokenizer(self) -> PreTrainedTokenizer:
         """
         Returns the underlying HuggingFace tokenizer
         """
@@ -95,7 +100,10 @@ class TextTokenizer:
         """
         Returns the padding token ID of the tokenizer
         """
-        return self._get_tokenizer().pad_token_id
+        tokenizer = self._get_tokenizer()
+        if tokenizer.pad_token_id is None:
+            raise ValueError("Tokenizer has no pad_token_id.")
+        return cast(int, tokenizer.pad_token_id)
 
 
 class DatasetBuilder:

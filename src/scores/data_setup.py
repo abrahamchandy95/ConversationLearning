@@ -1,5 +1,7 @@
-from typing import List, Optional, Union
-
+"""
+Sets up data to be prepared for the model
+"""
+from typing import List, Optional, Union, Tuple
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
@@ -36,8 +38,7 @@ class ConversationPreprocessor:
         """
         if row['role'] == 'assistant':
             return '<BOT>' + row['content']
-        else:
-            return '<USER>' + row['content']
+        return '<USER>' + row['content']
 
     def group_conversations(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -98,32 +99,33 @@ class ConversationDataset(Dataset):
     def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idx: Union[int, List[int]]):
+    def __getitem__(
+        self,
+        idx: Union[int, List[int]]
+    ) -> Tuple[
+        Union[torch.Tensor, List[torch.Tensor]],
+        Union[torch.Tensor, List[torch.Tensor]],
+        Optional[torch.Tensor]
+    ]:
         if isinstance(idx, int):
             row = self.df.iloc[idx]
-            tokenized: dict = row['tokenized']
-            # tokenized tensors are of shape [1, seq_len]
-            input_ids = tokenized['input_ids'].squeeze(0)
-            attention_mask = tokenized['attention_mask'].squeeze(0)
+            tok = row['tokenized']
+            input_ids = tok['input_ids'].squeeze(0)
+            attention_mask = tok['attention_mask'].squeeze(0)
 
+            targets: Optional[torch.Tensor] = None
             if self.target_columns:
-                # extract target values and convert to float tensor
-                target_vals = row[self.target_columns].to_numpy(dtype='float32')
-                targets = torch.tensor(target_vals, dtype=torch.float)
-                return input_ids, attention_mask, targets
+                vals = row[self.target_columns].to_numpy(dtype='float32')
+                targets = torch.tensor(vals, dtype=torch.float)
 
-            return input_ids, attention_mask
-        # only during inference
-        elif isinstance(idx, list):
-            input_ids = []
-            attention_mask = []
+            return input_ids, attention_mask, targets
 
-            for i in idx:
-                row = self.df.iloc[i]
-                tokenized = row['tokenized']
-                input_ids.append(tokenized['input_ids'].squeeze(0))
-                attention_mask.append(tokenized['attention_mask'].squeeze(0))
-            return input_ids, attention_mask
+        input_ids_list = []
+        attention_mask_list = []
+        for i in idx:
+            row = self.df.iloc[i]
+            tok = row['tokenized']
+            input_ids_list.append(tok['input_ids'].squeeze(0))
+            attention_mask_list.append(tok['attention_mask'].squeeze(0))
 
-        else:
-            raise TypeError
+        return input_ids_list, attention_mask_list, None

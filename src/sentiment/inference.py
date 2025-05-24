@@ -1,21 +1,26 @@
 """
 Run sentiment inference on a single thread_id using a trained SentimentLSTM.
 """
+import os
 from typing import Tuple, List
 import torch
 from torch.utils.data import DataLoader
-from transformers import DataCollatorWithPadding, logging
+from transformers import logging
+from transformers.data.data_collator import DataCollatorWithPadding
 import pandas as pd
+from supabase import create_client, Client
 
+from src.utils.utils import get_root
+from src.utils.db import load_conversation
 from .data_setup import TextTokenizer, DatasetBuilder, DataLoaderBuilder
 from .model_builder import SentimentLSTM, SentimentConfig
-from ..utils import get_root, load_conversation
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
 
 logging.set_verbosity_error()
 
 
 def prepare_thread_loader(
+    client: Client,
     thread_id: str,
     batch_size: int = 32,
     num_workers: int = 2
@@ -24,13 +29,13 @@ def prepare_thread_loader(
     Fetches messages for a thread_id from Supabase, aggregates user text,
     tokenizes it, and returns a DataLoader plus metadata.
     """
-    df = load_conversation(thread_id, SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    df = load_conversation(client, thread_id)
 
     user_df = df[df['role'] != 'assistant']
     grouped = user_df.groupby('thread_id', as_index=False).agg(
         text=('content', lambda msgs: ' '.join(msgs.tolist()))
     )
-
+    assert isinstance(grouped, pd.DataFrame), "Must be a DataFrame"
     tokenizer = TextTokenizer()
     ds_builder = DatasetBuilder(tokenizer)
     ds = ds_builder.from_dataframe(grouped[['text']], include_labels=False)
@@ -104,6 +109,7 @@ def map_probability_to_label(
 
 
 def run_thread_inference(
+    client: Client,
     thread_id: str,
     neg_thresh: float = 0.4,
     pos_thresh: float = 0.6
@@ -111,7 +117,7 @@ def run_thread_inference(
     """
     Returns the sentiment prediction (0,2,4) and P_positive for a given thread.
     """
-    loader, _, tokenizer = prepare_thread_loader(thread_id)
+    loader, _, tokenizer = prepare_thread_loader(client, thread_id)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = load_model(device, tokenizer)
     prob = infer_probabilities(model, loader)[0]
@@ -123,8 +129,11 @@ def main():
     """
     Calculates the sentiment of a given thread_id
     """
+    client = create_client(
+        os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
+    )
     thread_id = input("Enter thread_id: ").strip()
-    label, prob = run_thread_inference(thread_id)
+    label, prob = run_thread_inference(client, thread_id)
     label_map = {0: 'negative', 2: 'neutral', 4: 'positive'}
     print(f"Thread {thread_id} → {label_map[label]} (P_positive={prob:.3f})")
 

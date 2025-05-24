@@ -1,13 +1,14 @@
 """
 Train/Validation steps and evaluation metrics for conversation scoring
 """
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 import torch
 from torch.utils.data import DataLoader, random_split
 from torch import nn
 from torch import optim
 from tqdm.auto import tqdm
 from .data_setup import ConversationDataset
+from src.utils.utils import select_device
 
 
 def train_step(
@@ -165,9 +166,9 @@ def run_epoch(
     val_loader: DataLoader,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
-    device: torch.device
 ) -> Dict[str, float]:
     "Runs training and validation steps for one epoch and returns metrices"
+    device = select_device()
     train_loss = train_step(
         model, train_loader, loss_fn, optimizer, device
     )
@@ -190,8 +191,6 @@ def train(
         epochs: int,
         batch_size: int,
         learning_rate: float,
-        split: float = 0.1,
-        device: Optional[torch.device] = None
 ) -> Dict[str, List[float]]:
     """
         Trains the model and returns training and validation losses.
@@ -204,36 +203,31 @@ def train(
             batch_size: Batch size.
             learning_rate: Learning rate for the optimizer.
             split: Fraction of the dataset to use for validation.
-            device: Will select mps, cuda, or cpu.
 
         Returns:
             A dictionary of train_loss and val_loss per epoch.
     """
-    if device is None:
-        device = torch.device(
-            "mps" if torch.backends.mps.is_available()
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+    device = select_device()
     model.to(device)
-    train_loader, val_loader = prepare_dataloaders(dataset, batch_size, split)
-    loss_fn = nn.MSELoss()
+    train_loader, val_loader = prepare_dataloaders(dataset, batch_size, 0.1)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    results = {
-        "train_loss": [],
-        "val_loss": [],
-        "train_mae": [],
-        "val_mae": [],
-        "train_rsq": [],
-        "val_rsq": []
+    history = {
+        k: [] for k in [
+            "train_loss",
+            "val_loss",
+            "train_mae",
+            "val_mae",
+            "train_rsq",
+            "val_rsq"
+        ]
     }
-
     for epoch in tqdm(range(epochs), desc="Training"):
         metrics = run_epoch(
-            model, train_loader, val_loader, loss_fn, optimizer, device
+            model, train_loader, val_loader, nn.MSELoss(), optimizer
         )
         for key, value in metrics.items():
-            results[key].append(value)
+            history[key].append(value)
         print(
             f"Epoch {epoch+1}/{epochs}: "
             f"Train loss {metrics['train_loss']:.4f}, Val loss {
@@ -241,4 +235,4 @@ def train(
             f"MAE {metrics['train_mae']:.4f}/{metrics['val_mae']:.4f}; "
             f"R2 {metrics['train_rsq']:.4f}/{metrics['val_rsq']:.4f}"
         )
-    return results
+    return history

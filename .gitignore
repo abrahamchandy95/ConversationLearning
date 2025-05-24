@@ -19,3 +19,7 @@ documentation.tex
 research.tex
 research.pdf
 
+# Python virtual environments
+venv/
+.env
+

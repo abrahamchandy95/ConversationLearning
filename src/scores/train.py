@@ -3,25 +3,29 @@ Trains a Pytorch regression model for conversation scoring using data
 from Supabase
 """
 import argparse
+import os
 from typing import Tuple, List, Union
 from pathlib import Path
 
 from timeit import default_timer as timer
 import matplotlib.pyplot as plt
 import pandas as pd
-import torch
-
+from supabase import create_client, Client
 # config and utilities
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_KEY
-from ..utils import load_conversation, load_scores, save_model
-
-# internal modules
+from src.utils.utils import load_scores, save_model, select_device
+from src.utils.db import load_conversation
 from .data_setup import ConversationPreprocessor, ConversationDataset
 from .model_builder import ConversationScorerModel
 from .engine import train
 
 
-def load_inputs_and_targets() -> Tuple[pd.DataFrame, List[str]]:
+# Hyperparameters and device setup
+NUM_EPOCHS = 10
+BATCH_SIZE = 2
+LEARNING_RATE = 2e-4
+
+
+def load_inputs_and_targets(client: Client) -> Tuple[pd.DataFrame, List[str]]:
     """
     Loads the inputs from Supabase and our ground-truth values from
     root/data/scores.csv
@@ -44,7 +48,7 @@ def load_inputs_and_targets() -> Tuple[pd.DataFrame, List[str]]:
     valid_convs = pd.DataFrame()
 
     for tid in thread_ids:
-        chat_df = load_conversation(tid, SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        chat_df = load_conversation(client, tid)
         if chat_df.empty:
             continue
         tokenized_chat = preprocessor.preprocess_conversations(chat_df)
@@ -118,16 +122,12 @@ def main():
     )
     args = parser.parse_args()
 
-    # Hyperparameters and device setup
-    NUM_EPOCHS = 10
-    BATCH_SIZE = 2
-    LEARNING_RATE = 2e-4
-    device = torch.device(
-        "mps" if torch.backends.mps.is_available()
-        else ("cuda" if torch.cuda.is_available() else "cpu")
+    client = create_client(
+        os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
     )
+
     # load the scored_conversations and the target names
-    conv_df, target_names = load_inputs_and_targets()
+    conv_df, target_names = load_inputs_and_targets(client)
 
     # Create datasets
     dataset = ConversationDataset(conv_df, target_names)
@@ -135,7 +135,7 @@ def main():
     # create model
     num_targets = len(target_names)
     model = ConversationScorerModel(num_targets=num_targets)
-    model.to(device)
+    model.to(select_device())
 
     # Train the model using engine.train
     start_time = timer()
@@ -145,8 +145,6 @@ def main():
         epochs=NUM_EPOCHS,
         batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE,
-        split=0.1,
-        device=device
     )
     end_time = timer()
     print(f"Total training time: {end_time - start_time:.3f} seconds")
