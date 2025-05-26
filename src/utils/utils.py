@@ -69,21 +69,6 @@ def save_model(
     torch.save(obj=model.state_dict(), f=model_save_path)
 
 
-def select_device(verbose: bool = False) -> torch.device:
-    """
-    Returns the available device
-    """
-    if torch.backends.mps.is_available():
-        dev = torch.device("mps")
-    elif torch.cuda.is_available():
-        dev = torch.device("cuda")
-    else:
-        dev = torch.device("cpu")
-    if verbose:
-        print(f"Using device: {dev}")
-    return dev
-
-
 def load_score_model(
     model_dir: Path,
     num_targets: int,

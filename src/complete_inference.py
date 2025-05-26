@@ -21,9 +21,8 @@ from src.scores.data_setup import (
 from src.scores.inference import get_target_columns
 from src.sentiment.data_setup import TextTokenizer
 from src.utils.nlp import translate, extract_topics, count_requests
-from src.utils.utils import (
-    get_root, select_device, load_score_model, load_sentiment_model
-)
+from src.utils.utils import get_root, load_score_model, load_sentiment_model
+from src.utils.device import select_device
 from src.utils.db import load_thread_ids, load_chats_from_threads
 
 

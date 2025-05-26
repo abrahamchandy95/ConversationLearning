@@ -5,7 +5,7 @@ from typing import List, Optional, Union, Tuple
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
-from transformers.models.longformer import LongformerTokenizer
+from transformers import AutoTokenizer
 
 
 class ConversationPreprocessor:
@@ -18,7 +18,7 @@ class ConversationPreprocessor:
             tokenizer_model: str = 'allenai/longformer-base-4096',
             max_length: int = 3000
     ):
-        self.tokenizer = LongformerTokenizer.from_pretrained(tokenizer_model)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_model)
         self.max_length = max_length
 
     def add_role_tokens(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -58,7 +58,7 @@ class ConversationPreprocessor:
         of keys 'input_ids' and values 'attention_masks'. Both are
         Pytorch Tensors
         """
-        tokens = self.tokenizer.encode_plus(
+        tokens = self.tokenizer(
             text,
             add_special_tokens=True,
             max_length=self.max_length,

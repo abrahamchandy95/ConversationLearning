@@ -19,32 +19,32 @@ Configuration:
 """
 import os
 from typing import Optional, Dict, List, Any, Set
+from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from transformers.pipelines import pipeline
-from keybert import KeyBERT
-from sentence_transformers import SentenceTransformer
-from supabase import create_client, Client
-from sqlalchemy import create_engine, inspect
+from supabase import create_client
 
-from src.utils.utils import get_root, select_device
+from src.utils.utils import get_root
 from src.utils.db import load_chats_from_threads
+from src.utils.device import select_device
 from src.complete_inference import (
     fetch_new_thread_ids, compute_inference, upsert_inference_to_supabase
 )
 
 
-SENTENCE_MODEL = "all-MiniLM-L6-v2"
-TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-mul-en"
-
-SUPABASE_URL: str = os.environ["SUPABASE_URL"]
-SUPABASE_SERVICE_KEY: str = os.environ["SUPABASE_SERVICE_KEY"]
+load_dotenv()
 DATABASE_URL: str = os.environ["DATABASE_URL"]
-
 MODEL_DIR = get_root() / "models"
 MODEL_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Conversation Scores API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 class Request(BaseModel):
@@ -64,15 +64,11 @@ class Response(BaseModel):
 
 @app.on_event("startup")
 def on_startup():
-    app.state.supabase: Client = create_client(
+    app.state.supabase = create_client(
         os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
     )
-    app.state.engine = create_engine(DATABASE_URL)
-    app.state.inspector = inspect(app.state.engine)
+
     app.state.device = select_device()
-    app.state.sentence_model = SentenceTransformer(SENTENCE_MODEL)
-    app.state.keybert = KeyBERT(model=SENTENCE_MODEL)
-    app.state.translator = pipeline("translation", model=TRANSLATION_MODEL)
 
 
 @app.on_event("shutdown")
@@ -95,9 +91,7 @@ def score_chats(req: Request):
     if not tids:
         return []
     conv_df = load_chats_from_threads(app.state.supabase, list(tids))
-    inference_df = compute_inference(
-        conv_df, MODEL_DIR,  app.state.sentence_model, app.state.keybert, app.state.translator
-    )
+    inference_df = compute_inference(conv_df, MODEL_DIR)
     upsert_inference_to_supabase(
         app.state.supabase, app.state.engine, inference_df)
     # Build response

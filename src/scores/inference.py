@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import List, Dict, Tuple, TypedDict, cast
 import torch
 import pandas as pd
-from transformers import logging as hf_logging
+from transformers.utils import logging as hf_logging
 from supabase import create_client, Client
 
-from src.utils.utils import select_device
+from src.utils.device import select_device
 from src.utils.db import load_conversation
 from .model_builder import ConversationScorerModel
 from .data_setup import ConversationPreprocessor

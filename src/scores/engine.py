@@ -8,7 +8,7 @@ from torch import nn
 from torch import optim
 from tqdm.auto import tqdm
 from .data_setup import ConversationDataset
-from src.utils.utils import select_device
+from src.utils.device import select_device
 
 
 def train_step(

@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from transformers.models.longformer import LongformerModel
+from transformers import AutoModel, AutoTokenizer
 
 
 class AttentionPooling(nn.Module):
@@ -49,11 +49,15 @@ class ConversationScorerModel(nn.Module):
         self, num_targets, transformer_name='allenai/longformer-base-4096'
     ):
         super().__init__()
-        self.encoder = LongformerModel.from_pretrained(transformer_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(transformer_name)
+
+        # load the encoder via the generic AutoModel API
+        self.encoder = AutoModel.from_pretrained(transformer_name)
+        hidden_size = self.encoder.config.hidden_size
+        # fine‐tune only the last two transformer layers
         for layer in self.encoder.encoder.layer[-2:]:
             for param in layer.parameters():
                 param.requires_grad = True
-        hidden_size = self.encoder.config.hidden_size
 
         self.attn_pooler = AttentionPooling(hidden_size)
         self.mean_pool = self._mean_pool

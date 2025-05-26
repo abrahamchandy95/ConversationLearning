@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from supabase import create_client, Client
 # config and utilities
-from src.utils.utils import load_scores, save_model, select_device
+from src.utils.utils import load_scores, save_model
+from src.utils.device import select_device
 from src.utils.db import load_conversation
 from .data_setup import ConversationPreprocessor, ConversationDataset
 from .model_builder import ConversationScorerModel
