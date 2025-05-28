@@ -14,7 +14,7 @@ def get_root() -> Path:
     """
     Returns the root directory of the project
     """
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parents[2]
 
 
 def load_scores(

@@ -7,13 +7,14 @@ from typing import List, Tuple, Dict, Set
 from pathlib import Path
 import sys
 from requests.exceptions import HTTPError
+from dotenv import load_dotenv
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from transformers.utils import logging
 from supabase import create_client, Client
-from sqlalchemy import create_engine, Engine
 from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy import Engine
 
 from src.scores.data_setup import (
     ConversationPreprocessor, ConversationDataset
@@ -23,7 +24,7 @@ from src.sentiment.data_setup import TextTokenizer
 from src.utils.nlp import translate, extract_topics, count_requests
 from src.utils.utils import get_root, load_score_model, load_sentiment_model
 from src.utils.device import select_device
-from src.utils.db import load_thread_ids, load_chats_from_threads
+from src.utils.db import load_thread_ids, TableFetcher
 
 
 def aggr_user_messages(df: pd.DataFrame) -> pd.DataFrame:
@@ -201,21 +202,18 @@ def compute_inference(
 
 
 def upsert_inference_to_supabase(
-    client: Client, engine: Engine, inference_df: pd.DataFrame
+    client: Client, inference_df: pd.DataFrame
 ) -> None:
-    """Creates or appends to the chat_inference table"""
-    insp: Inspector = Inspector.from_engine(engine)
-    if not insp.has_table("chat_inference"):
-        inference_df.to_sql('chat_inference', engine,
-                            if_exists='replace', index=False)
-        print(f"Created table with {len(inference_df)} rows")
-    else:
-        client.table("chat_inference").insert(
-            inference_df.to_dict('records')).execute()
-        print(f"Added {len(inference_df)} rows.")
+    """Inserts results to the chat_inference table"""
+    records = inference_df.to_dict("records")
+    if not records:
+        return
+    client.table("chat_inference").upsert(records).execute()
+    print(f"Upserted {len(records)} rows into chat_inference")
 
 
 if __name__ == "__main__":
+    load_dotenv()
     logging.set_verbosity_error()
     model_dir = get_root() / "models"
 
@@ -223,12 +221,18 @@ if __name__ == "__main__":
     supabase = create_client(
         os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
     )
-    engine = create_engine(os.environ["DATABASE_URL"])
     ids_todo = fetch_new_thread_ids(supabase)
     if not ids_todo:
         print("No new thread ids to process")
         sys.exit(0)
 
-    conv_df = load_chats_from_threads(supabase, list(ids_todo))
+    fetcher = TableFetcher(
+        client=supabase,
+        table="chat_messages",
+    )
+
+    # this returns a DataFrame with all columns from chat_messages for the IDs
+    conv_df = fetcher.fetch_all(thread_ids=list(ids_todo))
     inference_df = compute_inference(conv_df, model_dir)
-    upsert_inference_to_supabase(supabase, engine, inference_df)
+    upsert_inference_to_supabase(supabase, inference_df)
+    print(inference_df.head())

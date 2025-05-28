@@ -102,10 +102,11 @@ class ConversationDataset(Dataset):
     def __getitem__(
         self,
         idx: Union[int, List[int]]
-    ) -> Tuple[
-        Union[torch.Tensor, List[torch.Tensor]],
-        Union[torch.Tensor, List[torch.Tensor]],
-        Optional[torch.Tensor]
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        Tuple[List[torch.Tensor], List[torch.Tensor]],
+        Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]
     ]:
         if isinstance(idx, int):
             row = self.df.iloc[idx]
@@ -113,13 +114,13 @@ class ConversationDataset(Dataset):
             input_ids = tok['input_ids'].squeeze(0)
             attention_mask = tok['attention_mask'].squeeze(0)
 
-            targets: Optional[torch.Tensor] = None
             if self.target_columns:
                 vals = row[self.target_columns].to_numpy(dtype='float32')
                 targets = torch.tensor(vals, dtype=torch.float)
+                return input_ids, attention_mask, targets
+            return input_ids, attention_mask
 
-            return input_ids, attention_mask, targets
-
+        # Multi‐index (batch) case
         input_ids_list = []
         attention_mask_list = []
         for i in idx:
@@ -128,4 +129,12 @@ class ConversationDataset(Dataset):
             input_ids_list.append(tok['input_ids'].squeeze(0))
             attention_mask_list.append(tok['attention_mask'].squeeze(0))
 
-        return input_ids_list, attention_mask_list, None
+        if self.target_columns:
+            target_list = []
+            for i in idx:
+                vals = self.df.iloc[i][self.target_columns].to_numpy(
+                    dtype='float32')
+                target_list.append(torch.tensor(vals, dtype=torch.float))
+            return input_ids_list, attention_mask_list, target_list
+
+        return input_ids_list, attention_mask_list
