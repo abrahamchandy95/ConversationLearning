@@ -1,6 +1,6 @@
-# ConversationScorer
+# ConversationLearning
 
-ConversationScorer is a machine learning project for scoring conversations between a bot and a user. 
+ConversationLearning is a machine learning project for scoring conversations between a bot and a user. 
 It uses data from Supabase along with target scores provided in a CSV file to train a regression model that predicts various conversational performance metrics.
 
 ## Table of Contents
